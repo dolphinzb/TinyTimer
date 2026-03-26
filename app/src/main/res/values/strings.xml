@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TinyTimer</string>
+    <string name="notification_channel_name">计时器</string>
+    <string name="notification_channel_desc">显示当前计时状态</string>
+    <string name="action_pause">暂停</string>
+    <string name="action_resume">继续</string>
+    <string name="action_stop">停止</string>
+</resources>
