@@ -141,7 +141,8 @@ fun HistoryPage(
                         records = records,
                         groups = groups,
                         dateTimeFormat = dateTimeFormat,
-                        onDeleteRecord = { viewModel.deleteRecord(it) }
+                        onDeleteRecord = { viewModel.deleteRecord(it) },
+                        onUpdateGroup = { recordId, newGroupId -> viewModel.updateRecordGroupId(recordId, newGroupId) }
                     )
                 }
                 ViewMode.CHART -> {
@@ -186,7 +187,8 @@ private fun ListViewContent(
     records: List<RecordEntity>,
     groups: List<GroupEntity>,
     dateTimeFormat: SimpleDateFormat,
-    onDeleteRecord: (RecordEntity) -> Unit
+    onDeleteRecord: (RecordEntity) -> Unit,
+    onUpdateGroup: (Long, Long?) -> Unit
 ) {
     if (records.isEmpty()) {
         EmptyState()
@@ -200,8 +202,10 @@ private fun ListViewContent(
                 RecordItem(
                     record = record,
                     group = groups.find { it.id == record.groupId },
+                    allGroups = groups,
                     dateTimeFormat = dateTimeFormat,
-                    onDelete = { onDeleteRecord(record) }
+                    onDelete = { onDeleteRecord(record) },
+                    onUpdateGroup = { newGroupId -> onUpdateGroup(record.id, newGroupId) }
                 )
             }
         }
@@ -490,10 +494,13 @@ private fun formatDuration(seconds: Long): String {
 private fun RecordItem(
     record: RecordEntity,
     group: GroupEntity?,
+    allGroups: List<GroupEntity>,
     dateTimeFormat: SimpleDateFormat,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onUpdateGroup: (Long?) -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showGroupPicker by remember { mutableStateOf(false) }
 
     val hours = record.duration / 3600000
     val minutes = (record.duration % 3600000) / 60000
@@ -521,11 +528,29 @@ private fun RecordItem(
                             .background(Color(group.color))
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = group.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    TextButton(
+                        onClick = { showGroupPicker = true },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text(
+                            text = group.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                    TextButton(
+                        onClick = { showGroupPicker = true },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text(
+                            text = "未分组",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(
@@ -593,6 +618,63 @@ private fun RecordItem(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (showGroupPicker) {
+        AlertDialog(
+            onDismissRequest = { showGroupPicker = false },
+            title = { Text("选择分组") },
+            text = {
+                Column {
+                    allGroups.forEach { g ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = record.groupId == g.id,
+                                onClick = {
+                                    onUpdateGroup(g.id)
+                                    showGroupPicker = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(g.color))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = g.name)
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = record.groupId == null,
+                            onClick = {
+                                onUpdateGroup(null)
+                                showGroupPicker = false
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "未分组")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showGroupPicker = false }) {
                     Text("取消")
                 }
             }

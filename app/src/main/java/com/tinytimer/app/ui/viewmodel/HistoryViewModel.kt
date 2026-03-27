@@ -57,4 +57,13 @@ class HistoryViewModel : ViewModel() {
             recordRepository.deleteRecord(record)
         }
     }
+
+    fun updateRecordGroupId(recordId: Long, newGroupId: Long?) {
+        viewModelScope.launch {
+            val record = recordRepository.getRecordById(recordId)
+            record?.let {
+                recordRepository.updateRecord(it.copy(groupId = newGroupId))
+            }
+        }
+    }
 }
