@@ -1,8 +1,10 @@
 package com.tinytimer.app.ui.pages
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -27,47 +29,7 @@ fun TimerPage(
     val isPaused by viewModel.isPaused.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val selectedGroupId by viewModel.selectedGroupId.collectAsState()
-    val showSaveDialog by viewModel.showSaveDialog.collectAsState()
-    var noteText by remember { mutableStateOf("") }
-
-    if (showSaveDialog) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("保存记录") },
-            text = {
-                Column {
-                    Text("是否保存此次计时记录？")
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = noteText,
-                        onValueChange = { noteText = it },
-                        label = { Text("备注（可选）") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.confirmStop(saveRecord = true, note = noteText.ifBlank { null })
-                        noteText = ""
-                    }
-                ) {
-                    Text("保存")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.confirmStop(saveRecord = false)
-                        noteText = ""
-                    }
-                ) {
-                    Text("不保存")
-                }
-            }
-        )
-    }
+    val sessionRecords by viewModel.sessionRecords.collectAsState()
 
     Scaffold(
         topBar = {
@@ -144,7 +106,56 @@ fun TimerPage(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            if (sessionRecords.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "本次计时记录",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                val surfaceColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(sessionRecords) { idx, record ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = surfaceColor
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "#${sessionRecords.size - idx}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = viewModel.formatTime(record.duration),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -182,18 +193,29 @@ fun TimerPage(
                     else -> {
                         Button(
                             onClick = { viewModel.pauseTimer() },
-                            modifier = Modifier.size(120.dp, 56.dp)
+                            modifier = Modifier.size(100.dp, 56.dp)
                         ) {
                             Icon(Icons.Default.Pause, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("暂停")
                         }
                         OutlinedButton(
-                            onClick = { viewModel.requestStop() },
-                            modifier = Modifier.size(120.dp, 56.dp)
+                            onClick = { viewModel.markAndSave() },
+                            modifier = Modifier.size(80.dp, 56.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.secondary
+                            )
+                        ) {
+                            Icon(Icons.Default.Bookmark, contentDescription = null)
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("标记")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.quickStop() },
+                            modifier = Modifier.size(80.dp, 56.dp)
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
                             Text("停止")
                         }
                     }

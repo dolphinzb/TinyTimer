@@ -16,6 +16,11 @@ import com.tinytimer.app.service.TimerService
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+data class SessionRecord(
+    val duration: Long,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val groupRepository = GroupRepository(TinyTimerApp.instance.database.groupDao())
@@ -38,6 +43,9 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showSaveDialog = MutableStateFlow(false)
     val showSaveDialog: StateFlow<Boolean> = _showSaveDialog
+
+    private val _sessionRecords = MutableStateFlow<List<SessionRecord>>(emptyList())
+    val sessionRecords: StateFlow<List<SessionRecord>> = _sessionRecords
 
     private var timerService: TimerService? = null
     private var bound = false
@@ -96,6 +104,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startTimer() {
+        _sessionRecords.value = emptyList()
         val intent = Intent(getApplication(), TimerService::class.java).apply {
             action = TimerService.ACTION_START
         }
@@ -115,6 +124,38 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     fun requestStop() {
         timerService?.requestStop()
+    }
+
+    fun markAndSave() {
+        val currentElapsed = if (_isPaused.value) {
+            _elapsedTime.value
+        } else {
+            val service = timerService
+            if (service != null) {
+                val state = service.timerState.value
+                val accumulated = state.accumulatedTime
+                val running = state.isRunning
+                val paused = state.isPaused
+                if (running && !paused) {
+                    accumulated + (System.currentTimeMillis() - state.startTime)
+                } else {
+                    accumulated
+                }
+            } else {
+                _elapsedTime.value
+            }
+        }
+        timerService?.markAndSave()
+        val record = SessionRecord(duration = currentElapsed)
+        _sessionRecords.value = listOf(record) + _sessionRecords.value
+    }
+
+    fun quickStop() {
+        val totalTime = _elapsedTime.value
+        timerService?.quickStop()
+        val record = SessionRecord(duration = totalTime)
+        _sessionRecords.value = listOf(record) + _sessionRecords.value
+        _elapsedTime.value = 0
     }
 
     fun confirmStop(saveRecord: Boolean, note: String? = null) {

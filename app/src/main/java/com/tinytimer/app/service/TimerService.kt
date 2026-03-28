@@ -129,6 +129,57 @@ class TimerService : Service() {
         _showSaveDialog.value = true
     }
 
+    fun markAndSave() {
+        if (!isRunning) return
+        val currentElapsed = if (isPaused) {
+            accumulatedTime
+        } else {
+            accumulatedTime + (System.currentTimeMillis() - startTime)
+        }
+        val endTime = System.currentTimeMillis()
+        val markStartTime = endTime - currentElapsed
+        serviceScope.launch {
+            val record = RecordEntity(
+                groupId = currentGroupId,
+                startTime = markStartTime,
+                endTime = endTime,
+                duration = currentElapsed,
+                note = null
+            )
+            recordRepository.insertRecord(record)
+        }
+    }
+
+    fun quickStop() {
+        if (!isRunning) return
+        timerJob?.cancel()
+        if (!isPaused) {
+            accumulatedTime += System.currentTimeMillis() - startTime
+        }
+        val endTime = System.currentTimeMillis()
+        val totalTime = accumulatedTime
+        serviceScope.launch {
+            val record = RecordEntity(
+                groupId = currentGroupId,
+                startTime = startTime,
+                endTime = endTime,
+                duration = totalTime,
+                note = null
+            )
+            recordRepository.insertRecord(record)
+        }
+        isRunning = false
+        isPaused = false
+        accumulatedTime = 0
+        _elapsedTime.value = 0
+        _timerState.value = TimerState()
+        serviceScope.launch {
+            timerStateRepository.clearTimerState()
+        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     fun confirmStop(saveRecord: Boolean, note: String? = null) {
         _showSaveDialog.value = false
 
