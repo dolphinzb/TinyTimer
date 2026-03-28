@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,7 +36,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 enum class ViewMode {
-    LIST, CHART
+    LIST, CHART, RANKING
 }
 
 enum class SelectionMode {
@@ -49,6 +50,7 @@ fun HistoryPage(
     onNavigateBack: () -> Unit
 ) {
     val records by viewModel.records.collectAsState()
+    val topRecords by viewModel.topRecords.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val filterGroupId by viewModel.filterGroupId.collectAsState()
     val filterDate by viewModel.filterDate.collectAsState()
@@ -110,12 +112,24 @@ fun HistoryPage(
                     } else {
                         IconButton(
                             onClick = {
-                                viewMode = if (viewMode == ViewMode.LIST) ViewMode.CHART else ViewMode.LIST
+                                viewMode = when (viewMode) {
+                                    ViewMode.LIST -> ViewMode.CHART
+                                    ViewMode.CHART -> ViewMode.RANKING
+                                    ViewMode.RANKING -> ViewMode.LIST
+                                }
                             }
                         ) {
                             Icon(
-                                if (viewMode == ViewMode.LIST) Icons.Default.Dashboard else Icons.Default.List,
-                                contentDescription = if (viewMode == ViewMode.LIST) "切换到图表" else "切换到列表"
+                                when (viewMode) {
+                                    ViewMode.LIST -> Icons.Default.Dashboard
+                                    ViewMode.CHART -> Icons.Default.Leaderboard
+                                    ViewMode.RANKING -> Icons.Default.List
+                                },
+                                contentDescription = when (viewMode) {
+                                    ViewMode.LIST -> "切换到图表"
+                                    ViewMode.CHART -> "切换到排名"
+                                    ViewMode.RANKING -> "切换到列表"
+                                }
                             )
                         }
                         if (records.isNotEmpty()) {
@@ -211,6 +225,15 @@ fun HistoryPage(
                     ChartViewContent(
                         records = records,
                         groups = groups
+                    )
+                }
+                ViewMode.RANKING -> {
+                    RankingViewContent(
+                        records = topRecords,
+                        groups = groups,
+                        dateTimeFormat = dateTimeFormat,
+                        onDeleteRecord = { viewModel.deleteRecord(it) },
+                        onUpdateGroup = { recordId, newGroupId -> viewModel.updateRecordGroupId(recordId, newGroupId) }
                     )
                 }
             }
@@ -455,7 +478,10 @@ private fun ChartViewContent(
 
                 val gridColor = Color.Gray.copy(alpha = 0.3f)
 
-                val ySteps = 5
+                // 计算最大分钟数，向上取整
+                val maxMinutes = Math.ceil((maxDuration / 60f).toDouble()).toInt()
+                val ySteps = maxMinutes.coerceAtLeast(5)
+                
                 for (i in 0..ySteps) {
                     val y = chartHeight * i / ySteps
                     drawLine(
@@ -477,7 +503,7 @@ private fun ChartViewContent(
                 }
 
                 for (i in 0..ySteps) {
-                    val value = maxDuration - (maxDuration - minDuration) * i / ySteps
+                    val value = ySteps * 60f - (ySteps * 60f - minDuration) * i / ySteps
                     val y = chartHeight * i / ySteps
                     val label = if (value >= 3600) {
                         String.format("%.1f时", value / 3600f)
@@ -497,6 +523,7 @@ private fun ChartViewContent(
                 }
 
                 val xStep = chartWidth / (totalPoints - 1).coerceAtLeast(1)
+                val maxYAxisDuration = ySteps * 60f
 
                 groupedByGroup.forEach { (groupId, points) ->
                     val color = groupColorMap[groupId] ?: Color.Blue
@@ -504,8 +531,8 @@ private fun ChartViewContent(
 
                     points.sortedBy { it.recordIndex }.forEachIndexed { index, point ->
                         val x = paddingLeft + xStep * point.recordIndex
-                        val normalizedValue = if (maxDuration > minDuration) {
-                            (point.durationSeconds - minDuration) / (maxDuration - minDuration)
+                        val normalizedValue = if (maxYAxisDuration > minDuration) {
+                            (point.durationSeconds - minDuration) / (maxYAxisDuration - minDuration)
                         } else 0.5f
                         val y = chartHeight * (1 - normalizedValue)
 
@@ -528,8 +555,8 @@ private fun ChartViewContent(
 
                     points.forEach { point ->
                         val x = paddingLeft + xStep * point.recordIndex
-                        val normalizedValue = if (maxDuration > minDuration) {
-                            (point.durationSeconds - minDuration) / (maxDuration - minDuration)
+                        val normalizedValue = if (maxYAxisDuration > minDuration) {
+                            (point.durationSeconds - minDuration) / (maxYAxisDuration - minDuration)
                         } else 0.5f
                         val y = chartHeight * (1 - normalizedValue)
 
@@ -580,6 +607,252 @@ private fun formatDuration(seconds: Long): String {
         seconds >= 3600 -> String.format("%d时%d分%d秒", seconds / 3600, (seconds % 3600) / 60, seconds % 60)
         seconds >= 60 -> String.format("%d分%d秒", seconds / 60, seconds % 60)
         else -> String.format("%d秒", seconds)
+    }
+}
+
+@Composable
+private fun RankingViewContent(
+    records: List<RecordEntity>,
+    groups: List<GroupEntity>,
+    dateTimeFormat: SimpleDateFormat,
+    onDeleteRecord: (RecordEntity) -> Unit,
+    onUpdateGroup: (Long, Long?) -> Unit
+) {
+    if (records.isEmpty()) {
+        EmptyState()
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(records) { index, record ->
+                RankingItem(
+                    rank = index + 1,
+                    record = record,
+                    group = groups.find { it.id == record.groupId },
+                    allGroups = groups,
+                    dateTimeFormat = dateTimeFormat,
+                    onDelete = { onDeleteRecord(record) },
+                    onUpdateGroup = { newGroupId -> onUpdateGroup(record.id, newGroupId) }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RankingItem(
+    rank: Int,
+    record: RecordEntity,
+    group: GroupEntity?,
+    allGroups: List<GroupEntity>,
+    dateTimeFormat: SimpleDateFormat,
+    onDelete: () -> Unit,
+    onUpdateGroup: (Long?) -> Unit
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showGroupPicker by remember { mutableStateOf(false) }
+
+    val hours = record.duration / 3600000
+    val minutes = (record.duration % 3600000) / 60000
+    val seconds = (record.duration % 60000) / 1000
+    val durationText = String.format("%d小时%d分%d秒", hours, minutes, seconds)
+
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(
+                            when (rank) {
+                                1 -> Color(0xFFFFD700) // 金色
+                                2 -> Color(0xFFC0C0C0) // 银色
+                                3 -> Color(0xFFCD7F32) // 铜色
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = rank.toString(),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (rank <= 3) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                if (group != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(Color(group.color))
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        onClick = { showGroupPicker = true },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text(
+                            text = group.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                    TextButton(
+                        onClick = { showGroupPicker = true },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text(
+                            text = "未分组",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "删除",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = durationText,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row {
+                Text(
+                    text = "开始: ${dateTimeFormat.format(Date(record.startTime))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (record.endTime != null) {
+                Text(
+                    text = "结束: ${dateTimeFormat.format(Date(record.endTime))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (!record.note.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "备注: ${record.note}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除这条记录吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete()
+                        showDeleteConfirm = false
+                    }
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (showGroupPicker) {
+        AlertDialog(
+            onDismissRequest = { showGroupPicker = false },
+            title = { Text("选择分组") },
+            text = {
+                Column {
+                    allGroups.forEach { g ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = record.groupId == g.id,
+                                onClick = {
+                                    onUpdateGroup(g.id)
+                                    showGroupPicker = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(g.color))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = g.name)
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = record.groupId == null,
+                            onClick = {
+                                onUpdateGroup(null)
+                                showGroupPicker = false
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "未分组")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showGroupPicker = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 

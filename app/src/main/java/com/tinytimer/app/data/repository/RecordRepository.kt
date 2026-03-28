@@ -36,4 +36,8 @@ class RecordRepository(private val recordDao: RecordDao) {
     suspend fun deleteRecordById(id: Long) = recordDao.deleteById(id)
 
     suspend fun deleteRecordsByIds(ids: List<Long>) = recordDao.deleteByIds(ids)
+
+    fun getTop10ShortestRecords(): Flow<List<RecordEntity>> = recordDao.getTop10ShortestRecords()
+
+    fun getTop10ShortestRecordsByGroup(groupId: Long): Flow<List<RecordEntity>> = recordDao.getTop10ShortestRecordsByGroup(groupId)
 }
