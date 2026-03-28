@@ -38,6 +38,10 @@ enum class ViewMode {
     LIST, CHART
 }
 
+enum class SelectionMode {
+    NONE, SELECTING
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryPage(
@@ -50,6 +54,9 @@ fun HistoryPage(
     val filterDate by viewModel.filterDate.collectAsState()
     var showDatePicker by remember { mutableStateOf(false) }
     var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+    var selectionMode by remember { mutableStateOf(SelectionMode.NONE) }
+    var selectedRecords by remember { mutableStateOf(setOf<Long>()) }
+    var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
@@ -57,26 +64,72 @@ fun HistoryPage(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("历史记录") },
+                title = {
+                    if (selectionMode == SelectionMode.SELECTING) {
+                        Text("已选择 ${selectedRecords.size} 项")
+                    } else {
+                        Text("历史记录")
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    if (selectionMode == SelectionMode.SELECTING) {
+                        IconButton(onClick = {
+                            selectionMode = SelectionMode.NONE
+                            selectedRecords = emptySet()
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "取消选择")
+                        }
+                    } else {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        }
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = {
-                            viewMode = if (viewMode == ViewMode.LIST) ViewMode.CHART else ViewMode.LIST
+                    if (selectionMode == SelectionMode.SELECTING) {
+                        TextButton(
+                            onClick = {
+                                selectedRecords = if (selectedRecords.size == records.size) {
+                                    emptySet()
+                                } else {
+                                    records.map { it.id }.toSet()
+                                }
+                            }
+                        ) {
+                            Text(if (selectedRecords.size == records.size) "取消全选" else "全选")
                         }
-                    ) {
-                        Icon(
-                            if (viewMode == ViewMode.LIST) Icons.Default.Dashboard else Icons.Default.List,
-                            contentDescription = if (viewMode == ViewMode.LIST) "切换到图表" else "切换到列表"
-                        )
-                    }
-                    if (filterGroupId != null || filterDate != null) {
-                        TextButton(onClick = { viewModel.clearFilters() }) {
-                            Text("清除筛选")
+                        if (selectedRecords.isNotEmpty()) {
+                            IconButton(onClick = { showBatchDeleteConfirm = true }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "批量删除",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    } else {
+                        IconButton(
+                            onClick = {
+                                viewMode = if (viewMode == ViewMode.LIST) ViewMode.CHART else ViewMode.LIST
+                            }
+                        ) {
+                            Icon(
+                                if (viewMode == ViewMode.LIST) Icons.Default.Dashboard else Icons.Default.List,
+                                contentDescription = if (viewMode == ViewMode.LIST) "切换到图表" else "切换到列表"
+                            )
+                        }
+                        if (records.isNotEmpty()) {
+                            IconButton(onClick = { selectionMode = SelectionMode.SELECTING }) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "进入选择模式"
+                                )
+                            }
+                        }
+                        if (filterGroupId != null || filterDate != null) {
+                            TextButton(onClick = { viewModel.clearFilters() }) {
+                                Text("清除筛选")
+                            }
                         }
                     }
                 }
@@ -142,7 +195,16 @@ fun HistoryPage(
                         groups = groups,
                         dateTimeFormat = dateTimeFormat,
                         onDeleteRecord = { viewModel.deleteRecord(it) },
-                        onUpdateGroup = { recordId, newGroupId -> viewModel.updateRecordGroupId(recordId, newGroupId) }
+                        onUpdateGroup = { recordId, newGroupId -> viewModel.updateRecordGroupId(recordId, newGroupId) },
+                        selectionMode = selectionMode,
+                        selectedRecords = selectedRecords,
+                        onToggleSelection = { recordId ->
+                            selectedRecords = if (selectedRecords.contains(recordId)) {
+                                selectedRecords - recordId
+                            } else {
+                                selectedRecords + recordId
+                            }
+                        }
                     )
                 }
                 ViewMode.CHART -> {
@@ -153,6 +215,32 @@ fun HistoryPage(
                 }
             }
         }
+    }
+
+    if (showBatchDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirm = false },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除选中的 ${selectedRecords.size} 条记录吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val recordsToDelete = records.filter { it.id in selectedRecords }
+                        viewModel.deleteRecords(recordsToDelete)
+                        selectedRecords = emptySet()
+                        selectionMode = SelectionMode.NONE
+                        showBatchDeleteConfirm = false
+                    }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     if (showDatePicker) {
@@ -188,7 +276,10 @@ private fun ListViewContent(
     groups: List<GroupEntity>,
     dateTimeFormat: SimpleDateFormat,
     onDeleteRecord: (RecordEntity) -> Unit,
-    onUpdateGroup: (Long, Long?) -> Unit
+    onUpdateGroup: (Long, Long?) -> Unit,
+    selectionMode: SelectionMode = SelectionMode.NONE,
+    selectedRecords: Set<Long> = emptySet(),
+    onToggleSelection: (Long) -> Unit = {}
 ) {
     if (records.isEmpty()) {
         EmptyState()
@@ -205,7 +296,10 @@ private fun ListViewContent(
                     allGroups = groups,
                     dateTimeFormat = dateTimeFormat,
                     onDelete = { onDeleteRecord(record) },
-                    onUpdateGroup = { newGroupId -> onUpdateGroup(record.id, newGroupId) }
+                    onUpdateGroup = { newGroupId -> onUpdateGroup(record.id, newGroupId) },
+                    selectionMode = selectionMode,
+                    isSelected = selectedRecords.contains(record.id),
+                    onToggleSelection = { onToggleSelection(record.id) }
                 )
             }
         }
@@ -497,7 +591,10 @@ private fun RecordItem(
     allGroups: List<GroupEntity>,
     dateTimeFormat: SimpleDateFormat,
     onDelete: () -> Unit,
-    onUpdateGroup: (Long?) -> Unit
+    onUpdateGroup: (Long?) -> Unit,
+    selectionMode: SelectionMode = SelectionMode.NONE,
+    isSelected: Boolean = false,
+    onToggleSelection: () -> Unit = {}
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showGroupPicker by remember { mutableStateOf(false) }
@@ -509,7 +606,18 @@ private fun RecordItem(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = { }
+        onClick = {
+            if (selectionMode == SelectionMode.SELECTING) {
+                onToggleSelection()
+            }
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Column(
             modifier = Modifier
@@ -520,6 +628,13 @@ private fun RecordItem(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (selectionMode == SelectionMode.SELECTING) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = { onToggleSelection() }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
                 if (group != null) {
                     Box(
                         modifier = Modifier
@@ -553,16 +668,18 @@ private fun RecordItem(
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(
-                    onClick = { showDeleteConfirm = true },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "删除",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                if (selectionMode == SelectionMode.NONE) {
+                    IconButton(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "删除",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
 
