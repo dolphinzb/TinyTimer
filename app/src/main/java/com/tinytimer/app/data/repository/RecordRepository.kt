@@ -34,4 +34,6 @@ class RecordRepository(private val recordDao: RecordDao) {
     suspend fun deleteRecord(record: RecordEntity) = recordDao.delete(record)
 
     suspend fun deleteRecordById(id: Long) = recordDao.deleteById(id)
+
+    suspend fun deleteRecordsByIds(ids: List<Long>) = recordDao.deleteByIds(ids)
 }

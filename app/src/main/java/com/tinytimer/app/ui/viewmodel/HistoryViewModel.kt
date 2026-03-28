@@ -66,4 +66,10 @@ class HistoryViewModel : ViewModel() {
             }
         }
     }
+
+    fun deleteRecords(records: List<RecordEntity>) {
+        viewModelScope.launch {
+            recordRepository.deleteRecordsByIds(records.map { it.id })
+        }
+    }
 }
