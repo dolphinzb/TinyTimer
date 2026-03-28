@@ -32,4 +32,10 @@ interface RecordDao {
 
     @Query("DELETE FROM records WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
+
+    @Query("SELECT * FROM records ORDER BY duration ASC LIMIT 10")
+    fun getTop10ShortestRecords(): Flow<List<RecordEntity>>
+
+    @Query("SELECT * FROM records WHERE groupId = :groupId ORDER BY duration ASC LIMIT 10")
+    fun getTop10ShortestRecordsByGroup(groupId: Long): Flow<List<RecordEntity>>
 }

@@ -39,6 +39,16 @@ class HistoryViewModel : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    val topRecords: StateFlow<List<RecordEntity>> = _filterGroupId
+        .flatMapLatest {
+            if (it != null) {
+                recordRepository.getTop10ShortestRecordsByGroup(it)
+            } else {
+                recordRepository.getTop10ShortestRecords()
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     fun setFilterGroup(groupId: Long?) {
         _filterGroupId.value = groupId
     }
