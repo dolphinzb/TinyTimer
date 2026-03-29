@@ -46,8 +46,7 @@ enum class SelectionMode {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryPage(
-    viewModel: HistoryViewModel = viewModel(),
-    onNavigateBack: () -> Unit
+    viewModel: HistoryViewModel = viewModel()
 ) {
     val records by viewModel.records.collectAsState()
     val topRecords by viewModel.topRecords.collectAsState()
@@ -63,102 +62,97 @@ fun HistoryPage(
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (selectionMode == SelectionMode.SELECTING) {
-                        Text("已选择 ${selectedRecords.size} 项")
-                    } else {
-                        Text("历史记录")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+        // 顶部工具栏
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (selectionMode == SelectionMode.SELECTING) {
+                Text("已选择 ${selectedRecords.size} 项")
+                Row {
+                    TextButton(
+                        onClick = {
+                            selectedRecords = if (selectedRecords.size == records.size) {
+                                emptySet()
+                            } else {
+                                records.map { it.id }.toSet()
+                            }
+                        }
+                    ) {
+                        Text(if (selectedRecords.size == records.size) "取消全选" else "全选")
                     }
-                },
-                navigationIcon = {
-                    if (selectionMode == SelectionMode.SELECTING) {
-                        IconButton(onClick = {
-                            selectionMode = SelectionMode.NONE
-                            selectedRecords = emptySet()
-                        }) {
-                            Icon(Icons.Default.Close, contentDescription = "取消选择")
-                        }
-                    } else {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                        }
-                    }
-                },
-                actions = {
-                    if (selectionMode == SelectionMode.SELECTING) {
-                        TextButton(
-                            onClick = {
-                                selectedRecords = if (selectedRecords.size == records.size) {
-                                    emptySet()
-                                } else {
-                                    records.map { it.id }.toSet()
-                                }
-                            }
-                        ) {
-                            Text(if (selectedRecords.size == records.size) "取消全选" else "全选")
-                        }
-                        if (selectedRecords.isNotEmpty()) {
-                            IconButton(onClick = { showBatchDeleteConfirm = true }) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "批量删除",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    } else {
-                        IconButton(
-                            onClick = {
-                                viewMode = when (viewMode) {
-                                    ViewMode.LIST -> ViewMode.CHART
-                                    ViewMode.CHART -> ViewMode.RANKING
-                                    ViewMode.RANKING -> ViewMode.LIST
-                                }
-                            }
-                        ) {
+                    if (selectedRecords.isNotEmpty()) {
+                        IconButton(onClick = { showBatchDeleteConfirm = true }) {
                             Icon(
-                                when (viewMode) {
-                                    ViewMode.LIST -> Icons.Default.Dashboard
-                                    ViewMode.CHART -> Icons.Default.Leaderboard
-                                    ViewMode.RANKING -> Icons.Default.List
-                                },
-                                contentDescription = when (viewMode) {
-                                    ViewMode.LIST -> "切换到图表"
-                                    ViewMode.CHART -> "切换到排名"
-                                    ViewMode.RANKING -> "切换到列表"
-                                }
+                                Icons.Default.Delete,
+                                contentDescription = "批量删除",
+                                tint = MaterialTheme.colorScheme.error
                             )
                         }
-                        if (records.isNotEmpty()) {
-                            IconButton(onClick = { selectionMode = SelectionMode.SELECTING }) {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = "进入选择模式"
-                                )
+                    }
+                    IconButton(onClick = {
+                        selectionMode = SelectionMode.NONE
+                        selectedRecords = emptySet()
+                    }) {
+                        Icon(Icons.Default.Close, contentDescription = "取消选择")
+                    }
+                }
+            } else {
+                Text(
+                    text = "历史记录",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Row {
+                    IconButton(
+                        onClick = {
+                            viewMode = when (viewMode) {
+                                ViewMode.LIST -> ViewMode.CHART
+                                ViewMode.CHART -> ViewMode.RANKING
+                                ViewMode.RANKING -> ViewMode.LIST
                             }
                         }
-                        if (filterGroupId != null || filterDate != null) {
-                            TextButton(onClick = { viewModel.clearFilters() }) {
-                                Text("清除筛选")
+                    ) {
+                        Icon(
+                            when (viewMode) {
+                                ViewMode.LIST -> Icons.Default.Dashboard
+                                ViewMode.CHART -> Icons.Default.Leaderboard
+                                ViewMode.RANKING -> Icons.Default.List
+                            },
+                            contentDescription = when (viewMode) {
+                                ViewMode.LIST -> "切换到图表"
+                                ViewMode.CHART -> "切换到排名"
+                                ViewMode.RANKING -> "切换到列表"
                             }
+                        )
+                    }
+                    if (records.isNotEmpty()) {
+                        IconButton(onClick = { selectionMode = SelectionMode.SELECTING }) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "进入选择模式"
+                            )
+                        }
+                    }
+                    if (filterGroupId != null || filterDate != null) {
+                        TextButton(onClick = { viewModel.clearFilters() }) {
+                            Text("清除筛选")
                         }
                     }
                 }
-            )
+            }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+
+        LazyRow(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            LazyRow(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
                 item {
                     FilterChip(
                         selected = filterGroupId == null && filterDate == null,
@@ -238,7 +232,6 @@ fun HistoryPage(
                 }
             }
         }
-    }
 
     if (showBatchDeleteConfirm) {
         AlertDialog(
