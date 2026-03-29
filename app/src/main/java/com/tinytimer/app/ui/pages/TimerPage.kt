@@ -20,9 +20,7 @@ import com.tinytimer.app.ui.viewmodel.TimerViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimerPage(
-    viewModel: TimerViewModel = viewModel(),
-    onNavigateToGroups: () -> Unit,
-    onNavigateToHistory: () -> Unit
+    viewModel: TimerViewModel = viewModel()
 ) {
     val elapsedTime by viewModel.elapsedTime.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
@@ -31,28 +29,12 @@ fun TimerPage(
     val selectedGroupId by viewModel.selectedGroupId.collectAsState()
     val sessionRecords by viewModel.sessionRecords.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("TinyTimer") },
-                actions = {
-                    IconButton(onClick = onNavigateToGroups) {
-                        Icon(Icons.Default.Folder, contentDescription = "分组")
-                    }
-                    IconButton(onClick = onNavigateToHistory) {
-                        Icon(Icons.Default.History, contentDescription = "历史")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
@@ -224,5 +206,4 @@ fun TimerPage(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
-    }
 }
