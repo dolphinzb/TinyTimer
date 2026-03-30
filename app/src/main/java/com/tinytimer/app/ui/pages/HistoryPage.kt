@@ -1,5 +1,8 @@
 package com.tinytimer.app.ui.pages
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +65,22 @@ fun HistoryPage(
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val message by viewModel.importExportMessage.collectAsState()
 
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.importRecords(context, it) }
+    }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessage()
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -144,6 +163,14 @@ fun HistoryPage(
                         TextButton(onClick = { viewModel.clearFilters() }) {
                             Text("清除筛选")
                         }
+                    }
+                    IconButton(onClick = { viewModel.exportRecords(context) }) {
+                        Icon(Icons.Default.Upload, contentDescription = "导出")
+                    }
+                    IconButton(onClick = {
+                        importLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*"))
+                    }) {
+                        Icon(Icons.Default.Download, contentDescription = "导入")
                     }
                 }
             }
@@ -232,6 +259,8 @@ fun HistoryPage(
                 }
             }
         }
+
+        SnackbarHost(hostState = snackbarHostState)
 
     if (showBatchDeleteConfirm) {
         AlertDialog(

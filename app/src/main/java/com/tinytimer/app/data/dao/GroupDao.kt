@@ -9,11 +9,17 @@ interface GroupDao {
     @Query("SELECT * FROM groups ORDER BY createdAt DESC")
     fun getAllGroups(): Flow<List<GroupEntity>>
 
+    @Query("SELECT * FROM groups ORDER BY createdAt DESC")
+    suspend fun getAllGroupsOnce(): List<GroupEntity>
+
     @Query("SELECT * FROM groups WHERE id = :id")
     suspend fun getGroupById(id: Long): GroupEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(group: GroupEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(groups: List<GroupEntity>)
 
     @Update
     suspend fun update(group: GroupEntity)

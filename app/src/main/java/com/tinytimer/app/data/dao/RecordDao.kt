@@ -9,6 +9,9 @@ interface RecordDao {
     @Query("SELECT * FROM records ORDER BY startTime DESC")
     fun getAllRecords(): Flow<List<RecordEntity>>
 
+    @Query("SELECT * FROM records ORDER BY startTime DESC")
+    suspend fun getAllRecordsOnce(): List<RecordEntity>
+
     @Query("SELECT * FROM records WHERE groupId = :groupId ORDER BY startTime DESC")
     fun getRecordsByGroup(groupId: Long): Flow<List<RecordEntity>>
 
