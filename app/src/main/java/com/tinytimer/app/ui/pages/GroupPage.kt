@@ -1,5 +1,8 @@
 package com.tinytimer.app.ui.pages
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tinytimer.app.data.entity.GroupEntity
@@ -27,9 +31,25 @@ fun GroupPage(
 ) {
     val groups by viewModel.groups.collectAsState()
     val editingGroup by viewModel.editingGroup.collectAsState()
+    val message by viewModel.importExportMessage.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     var dialogName by remember { mutableStateOf("") }
     var dialogColor by remember { mutableStateOf(0xFF2196F3) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.importGroups(context, it) }
+    }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessage()
+        }
+    }
 
     val colorOptions = listOf(
         0xFF2196F3, 0xFF4CAF50, 0xFFF44336, 0xFFFF9800,
@@ -43,6 +63,16 @@ fun GroupPage(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.exportGroups(context) }) {
+                        Icon(Icons.Default.Upload, contentDescription = "导出分组")
+                    }
+                    IconButton(onClick = {
+                        importLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*"))
+                    }) {
+                        Icon(Icons.Default.Download, contentDescription = "导入分组")
                     }
                 }
             )
@@ -58,7 +88,8 @@ fun GroupPage(
             ) {
                 Icon(Icons.Default.Add, contentDescription = "添加分组")
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         if (groups.isEmpty()) {
             Box(

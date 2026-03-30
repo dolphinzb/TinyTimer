@@ -1,5 +1,9 @@
 package com.tinytimer.app.ui.viewmodel
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinytimer.app.TinyTimerApp
@@ -7,9 +11,12 @@ import com.tinytimer.app.data.entity.GroupEntity
 import com.tinytimer.app.data.entity.RecordEntity
 import com.tinytimer.app.data.repository.GroupRepository
 import com.tinytimer.app.data.repository.RecordRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModel : ViewModel() {
@@ -49,6 +56,9 @@ class HistoryViewModel : ViewModel() {
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    private val _importExportMessage = MutableStateFlow<String?>(null)
+    val importExportMessage: StateFlow<String?> = _importExportMessage
+
     fun setFilterGroup(groupId: Long?) {
         _filterGroupId.value = groupId
     }
@@ -81,5 +91,60 @@ class HistoryViewModel : ViewModel() {
         viewModelScope.launch {
             recordRepository.deleteRecordsByIds(records.map { it.id })
         }
+    }
+
+    fun exportRecords(context: Context) {
+        viewModelScope.launch {
+            try {
+                val csvContent = recordRepository.exportToCsv()
+                val fileName = "TinyTimer_Records_Export.csv"
+                val file = withContext(Dispatchers.IO) {
+                    val exportDir = File(context.cacheDir, "exports")
+                    if (!exportDir.exists()) exportDir.mkdirs()
+                    val exportFile = File(exportDir, fileName)
+                    exportFile.writeText(csvContent)
+                    exportFile
+                }
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/csv"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "导出历史记录"))
+            } catch (e: Exception) {
+                _importExportMessage.value = "导出失败: ${e.message}"
+            }
+        }
+    }
+
+    fun importRecords(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val csvContent = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: throw Exception("无法读取文件")
+                }
+                val result = recordRepository.importFromCsv(csvContent)
+                result.fold(
+                    onSuccess = { count ->
+                        _importExportMessage.value = "成功导入 $count 条记录"
+                    },
+                    onFailure = { e ->
+                        _importExportMessage.value = "导入失败: ${e.message}"
+                    }
+                )
+            } catch (e: Exception) {
+                _importExportMessage.value = "导入失败: ${e.message}"
+            }
+        }
+    }
+
+    fun clearMessage() {
+        _importExportMessage.value = null
     }
 }

@@ -18,10 +18,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import kotlinx.coroutines.flow.map
+import com.tinytimer.app.ui.pages.GroupPage
 import com.tinytimer.app.ui.pages.HistoryPage
 import com.tinytimer.app.ui.pages.SettingsPage
 import com.tinytimer.app.ui.pages.TimerPage
@@ -109,7 +112,16 @@ fun TinyTimerApp() {
             }
             composable("settings") {
                 Column(modifier = Modifier.padding(paddingValues)) {
-                    SettingsPage()
+                    SettingsPage(
+                        onNavigateToGroups = { navController.navigate("groups") }
+                    )
+                }
+            }
+            composable("groups") {
+                Column(modifier = Modifier.padding(paddingValues)) {
+                    GroupPage(
+                        onNavigateBack = { navController.popBackStack() }
+                    )
                 }
             }
         }
