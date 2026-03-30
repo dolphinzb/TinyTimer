@@ -81,7 +81,6 @@ fun HistoryPage(
             viewModel.clearMessage()
         }
     }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
