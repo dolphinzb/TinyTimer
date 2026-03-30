@@ -26,7 +26,8 @@ fun TimerPage(
     val isRunning by viewModel.isRunning.collectAsState()
     val isPaused by viewModel.isPaused.collectAsState()
     val groups by viewModel.groups.collectAsState()
-    val selectedGroupId by viewModel.selectedGroupId.collectAsState()
+    val selectedGroupIds by viewModel.selectedGroupIds.collectAsState()
+    val stoppedGroupIds by viewModel.stoppedGroupIds.collectAsState()
     val sessionRecords by viewModel.sessionRecords.collectAsState()
 
     Column(
@@ -71,17 +72,17 @@ fun TimerPage(
             ) {
                 item {
                     FilterChip(
-                        selected = selectedGroupId == null,
-                        onClick = { viewModel.selectGroup(null) },
+                        selected = selectedGroupIds.isEmpty(),
+                        onClick = { viewModel.clearSelectedGroups() },
                         label = { Text("无分组") }
                     )
                 }
                 items(groups) { group ->
                     FilterChip(
-                        selected = selectedGroupId == group.id,
+                        selected = selectedGroupIds.contains(group.id),
                         onClick = { viewModel.selectGroup(group.id) },
                         label = { Text(group.name) },
-                        leadingIcon = if (selectedGroupId == group.id) {
+                        leadingIcon = if (selectedGroupIds.contains(group.id)) {
                             { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
                         } else null
                     )
@@ -121,8 +122,9 @@ fun TimerPage(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "#${sessionRecords.size - idx}",
-                                        style = MaterialTheme.typography.labelMedium,
+                                        text = record.groupName ?: "#${sessionRecords.size - idx}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
@@ -147,7 +149,7 @@ fun TimerPage(
                         Button(
                             onClick = { viewModel.startTimer() },
                             modifier = Modifier.size(120.dp, 56.dp),
-                            enabled = groups.isNotEmpty() || selectedGroupId == null
+                            enabled = groups.isNotEmpty() || selectedGroupIds.isEmpty()
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -163,13 +165,50 @@ fun TimerPage(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("继续")
                         }
-                        OutlinedButton(
-                            onClick = { viewModel.requestStop() },
-                            modifier = Modifier.size(120.dp, 56.dp)
+                        if (selectedGroupIds.size > 1) {
+                            selectedGroupIds.forEach { groupId ->
+                                val group = groups.find { it.id == groupId }
+                                OutlinedButton(
+                                    onClick = { viewModel.stopGroup(groupId) },
+                                    modifier = Modifier.widthIn(min = 80.dp, max = 120.dp).height(56.dp),
+                                    enabled = !stoppedGroupIds.contains(groupId)
+                                ) {
+                                    Text(
+                                        text = group?.name ?: "?"
+                                    )
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.requestStop() },
+                                modifier = Modifier.size(120.dp, 56.dp)
+                            ) {
+                                Icon(Icons.Default.Stop, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("停止")
+                            }
+                        }
+                    }
+                    selectedGroupIds.size > 1 -> {
+                        Button(
+                            onClick = { viewModel.pauseTimer() },
+                            modifier = Modifier.size(100.dp, 56.dp)
                         ) {
-                            Icon(Icons.Default.Stop, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("停止")
+                            Icon(Icons.Default.Pause, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("暂停")
+                        }
+                        selectedGroupIds.forEach { groupId ->
+                            val group = groups.find { it.id == groupId }
+                            OutlinedButton(
+                                onClick = { viewModel.stopGroup(groupId) },
+                                modifier = Modifier.widthIn(min = 80.dp, max = 120.dp).height(56.dp),
+                                enabled = !stoppedGroupIds.contains(groupId)
+                            ) {
+                                Text(
+                                    text = group?.name ?: "?"
+                                )
+                            }
                         }
                     }
                     else -> {

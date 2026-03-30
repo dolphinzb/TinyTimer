@@ -168,6 +168,16 @@ class TimerService : Service() {
             )
             recordRepository.insertRecord(record)
         }
+        doStop()
+    }
+
+    fun stopImmediately() {
+        if (!isRunning) return
+        timerJob?.cancel()
+        doStop()
+    }
+
+    private fun doStop() {
         isRunning = false
         isPaused = false
         accumulatedTime = 0
@@ -199,18 +209,7 @@ class TimerService : Service() {
             }
         }
 
-        isRunning = false
-        isPaused = false
-        accumulatedTime = 0
-        _elapsedTime.value = 0
-        _timerState.value = TimerState()
-
-        serviceScope.launch {
-            timerStateRepository.clearTimerState()
-        }
-
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        doStop()
     }
 
     private fun startTimerJob() {
