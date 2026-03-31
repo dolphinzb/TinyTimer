@@ -162,7 +162,11 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 _elapsedTime.value
             }
         }
-        timerService?.markAndSave()
+
+        if (_selectedGroupIds.value.size > 1) {
+            timerService?.markAndSave()
+        }
+
         val record = SessionRecord(duration = currentElapsed)
         _sessionRecords.value = listOf(record) + _sessionRecords.value
     }
