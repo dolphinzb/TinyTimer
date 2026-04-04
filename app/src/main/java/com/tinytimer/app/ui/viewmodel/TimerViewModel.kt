@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinytimer.app.TinyTimerApp
 import com.tinytimer.app.data.entity.GroupEntity
+import com.tinytimer.app.data.entity.RecordEntity
 import com.tinytimer.app.data.repository.GroupRepository
 import com.tinytimer.app.data.repository.RecordRepository
 import com.tinytimer.app.service.TimerService
@@ -18,6 +19,8 @@ import kotlinx.coroutines.launch
 
 data class SessionRecord(
     val duration: Long,
+    val groupId: Long? = null,
+    val groupName: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -29,8 +32,11 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     val groups: StateFlow<List<GroupEntity>> = groupRepository.getAllGroups()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    private val _selectedGroupId = MutableStateFlow<Long?>(null)
-    val selectedGroupId: StateFlow<Long?> = _selectedGroupId
+    private val _selectedGroupIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedGroupIds: StateFlow<Set<Long>> = _selectedGroupIds
+
+    private val _stoppedGroupIds = MutableStateFlow<Set<Long>>(emptySet())
+    val stoppedGroupIds: StateFlow<Set<Long>> = _stoppedGroupIds
 
     private val _elapsedTime = MutableStateFlow(0L)
     val elapsedTime: StateFlow<Long> = _elapsedTime
@@ -87,9 +93,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             timerService?.timerState?.collect { state ->
                 _isRunning.value = state.isRunning
                 _isPaused.value = state.isPaused
-                if (state.groupId != null) {
-                    _selectedGroupId.value = state.groupId
-                }
             }
         }
         viewModelScope.launch {
@@ -99,19 +102,33 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectGroup(groupId: Long?) {
-        _selectedGroupId.value = groupId
+    fun selectGroup(groupId: Long) {
+        val current = _selectedGroupIds.value
+        _selectedGroupIds.value = if (current.contains(groupId)) {
+            current - groupId
+        } else {
+            current + groupId
+        }
+    }
+
+    fun clearSelectedGroups() {
+        _selectedGroupIds.value = emptySet()
+        _stoppedGroupIds.value = emptySet()
     }
 
     fun startTimer() {
         _sessionRecords.value = emptyList()
+        _stoppedGroupIds.value = emptySet()
         val intent = Intent(getApplication(), TimerService::class.java).apply {
             action = TimerService.ACTION_START
         }
         getApplication<Application>().startForegroundService(intent)
-        _selectedGroupId.value?.let { groupId ->
-            timerService?.startTimer(groupId)
-        } ?: timerService?.startTimer(null)
+        val selectedIds = _selectedGroupIds.value
+        if (selectedIds.isNotEmpty()) {
+            timerService?.startTimer(selectedIds.first())
+        } else {
+            timerService?.startTimer(null)
+        }
     }
 
     fun pauseTimer() {
@@ -124,6 +141,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     fun requestStop() {
         timerService?.requestStop()
+    }
+
+    fun stopTimer() {
+        val totalTime = _elapsedTime.value
+        timerService?.stopTimer()
+        val record = SessionRecord(duration = totalTime)
+        _sessionRecords.value = listOf(record) + _sessionRecords.value
+        _elapsedTime.value = 0
     }
 
     fun markAndSave() {
@@ -145,9 +170,45 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 _elapsedTime.value
             }
         }
-        timerService?.markAndSave()
+
+        if (_selectedGroupIds.value.size > 1) {
+            timerService?.markAndSave()
+        }
+
         val record = SessionRecord(duration = currentElapsed)
         _sessionRecords.value = listOf(record) + _sessionRecords.value
+    }
+
+    fun stopGroup(groupId: Long) {
+        val currentElapsed = _elapsedTime.value
+        _stoppedGroupIds.value = _stoppedGroupIds.value + groupId
+
+        val groupName = groups.value.find { it.id == groupId }?.name
+
+        viewModelScope.launch {
+            val record = RecordEntity(
+                groupId = groupId,
+                startTime = System.currentTimeMillis() - currentElapsed,
+                endTime = System.currentTimeMillis(),
+                duration = currentElapsed
+            )
+            recordRepository.insertRecord(record)
+        }
+
+        val sessionRecord = SessionRecord(
+            duration = currentElapsed,
+            groupId = groupId,
+            groupName = groupName
+        )
+        _sessionRecords.value = listOf(sessionRecord) + _sessionRecords.value
+
+        val stoppedCount = _stoppedGroupIds.value.size
+        val selectedCount = _selectedGroupIds.value.size
+        if (stoppedCount >= selectedCount && selectedCount > 1) {
+            timerService?.stopImmediately()
+            _elapsedTime.value = 0
+            clearSelectedGroups()
+        }
     }
 
     fun quickStop() {
