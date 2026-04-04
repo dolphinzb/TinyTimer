@@ -180,7 +180,7 @@ fun TimerPage(
                             }
                         } else {
                             OutlinedButton(
-                                onClick = { viewModel.requestStop() },
+                                onClick = { viewModel.stopTimer() },
                                 modifier = Modifier.size(120.dp, 56.dp)
                             ) {
                                 Icon(Icons.Default.Stop, contentDescription = null)

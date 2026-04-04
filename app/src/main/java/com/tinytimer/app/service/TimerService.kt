@@ -129,6 +129,15 @@ class TimerService : Service() {
         _showSaveDialog.value = true
     }
 
+    fun stopTimer() {
+        if (!isRunning) return
+        timerJob?.cancel()
+        if (!isPaused) {
+            accumulatedTime += System.currentTimeMillis() - startTime
+        }
+        finishAndSave()
+    }
+
     fun markAndSave() {
         if (!isRunning) return
         val currentElapsed = if (isPaused) {
@@ -156,6 +165,16 @@ class TimerService : Service() {
         if (!isPaused) {
             accumulatedTime += System.currentTimeMillis() - startTime
         }
+        finishAndSave()
+    }
+
+    fun stopImmediately() {
+        if (!isRunning) return
+        timerJob?.cancel()
+        doStop()
+    }
+
+    private fun finishAndSave() {
         val endTime = System.currentTimeMillis()
         val totalTime = accumulatedTime
         serviceScope.launch {
@@ -168,12 +187,6 @@ class TimerService : Service() {
             )
             recordRepository.insertRecord(record)
         }
-        doStop()
-    }
-
-    fun stopImmediately() {
-        if (!isRunning) return
-        timerJob?.cancel()
         doStop()
     }
 
@@ -191,6 +204,8 @@ class TimerService : Service() {
     }
 
     fun confirmStop(saveRecord: Boolean, note: String? = null) {
+        if (!isRunning && !_showSaveDialog.value) return
+
         _showSaveDialog.value = false
 
         val endTime = System.currentTimeMillis()

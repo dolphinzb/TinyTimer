@@ -11,7 +11,8 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsPage(
-    onNavigateToGroups: () -> Unit
+    onNavigateToGroups: () -> Unit,
+    onNavigateToAbout: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -29,7 +30,7 @@ fun SettingsPage(
             SettingItem(
                 icon = Icons.Default.Info,
                 title = "关于",
-                onClick = { }
+                onClick = onNavigateToAbout
             )
             SettingItem(
                 icon = Icons.Default.Help,

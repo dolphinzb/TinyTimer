@@ -143,6 +143,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         timerService?.requestStop()
     }
 
+    fun stopTimer() {
+        val totalTime = _elapsedTime.value
+        timerService?.stopTimer()
+        val record = SessionRecord(duration = totalTime)
+        _sessionRecords.value = listOf(record) + _sessionRecords.value
+        _elapsedTime.value = 0
+    }
+
     fun markAndSave() {
         val currentElapsed = if (_isPaused.value) {
             _elapsedTime.value
