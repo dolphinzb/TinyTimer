@@ -93,6 +93,20 @@ class HistoryViewModel : ViewModel() {
         }
     }
 
+    fun addManualRecord(groupId: Long?, startTime: Long, duration: Long) {
+        viewModelScope.launch {
+            val endTime = startTime + duration
+            val record = RecordEntity(
+                groupId = groupId,
+                startTime = startTime,
+                endTime = endTime,
+                duration = duration
+            )
+            recordRepository.insertRecord(record)
+            _importExportMessage.value = "记录添加成功"
+        }
+    }
+
     fun exportRecords(context: Context) {
         viewModelScope.launch {
             try {
