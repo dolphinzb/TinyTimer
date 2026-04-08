@@ -62,6 +62,8 @@ fun HistoryPage(
     var selectionMode by remember { mutableStateOf(SelectionMode.NONE) }
     var selectedRecords by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
+    var showManualRecordDialog by remember { mutableStateOf(false) }
+    var moreMenuExpanded by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
@@ -164,13 +166,45 @@ fun HistoryPage(
                             Text("清除筛选")
                         }
                     }
-                    IconButton(onClick = { viewModel.exportRecords(context) }) {
-                        Icon(Icons.Default.Upload, contentDescription = "导出")
-                    }
-                    IconButton(onClick = {
-                        importLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*"))
-                    }) {
-                        Icon(Icons.Default.Download, contentDescription = "导入")
+                    Box {
+                        IconButton(onClick = { moreMenuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(
+                            expanded = moreMenuExpanded,
+                            onDismissRequest = { moreMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("手动添加") },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    showManualRecordDialog = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("导出记录") },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    viewModel.exportRecords(context)
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Upload, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("导入记录") },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    importLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*"))
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Download, contentDescription = null)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -312,6 +346,17 @@ fun HistoryPage(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    if (showManualRecordDialog) {
+        ManualRecordDialog(
+            groups = groups,
+            onDismiss = { showManualRecordDialog = false },
+            onConfirm = { groupId, startTime, duration ->
+                viewModel.addManualRecord(groupId, startTime, duration)
+                showManualRecordDialog = false
+            }
+        )
     }
 }
 

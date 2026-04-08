@@ -93,10 +93,10 @@ TinyTimer/
 
 ```bash
 # Debug 构建
-./gradlew assembleDebug
+gradle assembleDebug
 
 # Release 构建（需配置签名）
-./gradlew assembleRelease
+gradle assembleRelease
 ```
 
 ### 安装到设备
@@ -208,7 +208,7 @@ adb kill-server && adb start-server
 2. **Foreground Service 必须设置正确的 `foregroundServiceType`**（当前为 `specialUse`）
 3. **通知渠道只创建一次**，后续直接使用已有 ID
 4. **使用 ADB 安装时**，如果设备显示"无法安装"可能是签名问题，需卸载旧版本
-5. **构建前先同步 Gradle** (`./gradlew sync`)
+5. **构建前先同步 Gradle** (`./gradle sync`)
 
 ---
 
