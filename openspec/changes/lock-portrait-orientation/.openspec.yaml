@@ -1,0 +1,4 @@
+name: lock-portrait-orientation
+description: 锁定应用为竖屏显示，禁止横屏
+type: feature
+createdAt: 2026-04-05
