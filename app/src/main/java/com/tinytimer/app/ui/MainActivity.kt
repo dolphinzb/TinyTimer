@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.map
 import com.tinytimer.app.ui.pages.AboutPage
 import com.tinytimer.app.ui.pages.GroupPage
 import com.tinytimer.app.ui.pages.HistoryPage
+import com.tinytimer.app.ui.pages.PrizePage
 import com.tinytimer.app.ui.pages.SettingsPage
 import com.tinytimer.app.ui.pages.TimerPage
 import com.tinytimer.app.ui.theme.TinyTimerTheme
@@ -115,7 +116,8 @@ fun TinyTimerApp() {
                 Column(modifier = Modifier.padding(paddingValues)) {
                     SettingsPage(
                         onNavigateToGroups = { navController.navigate("groups") },
-                        onNavigateToAbout = { navController.navigate("about") }
+                        onNavigateToAbout = { navController.navigate("about") },
+                        onNavigateToPrizes = { navController.navigate("prizes") }
                     )
                 }
             }
@@ -129,6 +131,13 @@ fun TinyTimerApp() {
             composable("about") {
                 Column(modifier = Modifier.padding(paddingValues)) {
                     AboutPage(
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            composable("prizes") {
+                Column(modifier = Modifier.padding(paddingValues)) {
+                    PrizePage(
                         onNavigateBack = { navController.popBackStack() }
                     )
                 }

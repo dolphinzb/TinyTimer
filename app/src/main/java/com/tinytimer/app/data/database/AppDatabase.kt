@@ -5,19 +5,22 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.tinytimer.app.data.dao.GroupDao
+import com.tinytimer.app.data.dao.PrizeDao
 import com.tinytimer.app.data.dao.RecordDao
 import com.tinytimer.app.data.dao.TimerStateDao
 import com.tinytimer.app.data.entity.GroupEntity
+import com.tinytimer.app.data.entity.PrizeEntity
 import com.tinytimer.app.data.entity.RecordEntity
 import com.tinytimer.app.data.entity.TimerStateEntity
 
 @Database(
-    entities = [GroupEntity::class, RecordEntity::class, TimerStateEntity::class],
-    version = 1,
+    entities = [GroupEntity::class, PrizeEntity::class, RecordEntity::class, TimerStateEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groupDao(): GroupDao
+    abstract fun prizeDao(): PrizeDao
     abstract fun recordDao(): RecordDao
     abstract fun timerStateDao(): TimerStateDao
 

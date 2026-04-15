@@ -12,7 +12,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsPage(
     onNavigateToGroups: () -> Unit,
-    onNavigateToAbout: () -> Unit
+    onNavigateToAbout: () -> Unit,
+    onNavigateToPrizes: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -23,6 +24,11 @@ fun SettingsPage(
                 icon = Icons.Default.Folder,
                 title = "分组管理",
                 onClick = onNavigateToGroups
+            )
+            SettingItem(
+                icon = Icons.Default.EmojiEvents,
+                title = "奖品配置",
+                onClick = onNavigateToPrizes
             )
         }
 
