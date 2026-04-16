@@ -10,8 +10,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinytimer.app.TinyTimerApp
 import com.tinytimer.app.data.entity.GroupEntity
+import com.tinytimer.app.data.entity.PrizeEntity
 import com.tinytimer.app.data.entity.RecordEntity
+import com.tinytimer.app.data.model.RewardInfo
+import com.tinytimer.app.data.model.TimerRanking
 import com.tinytimer.app.data.repository.GroupRepository
+import com.tinytimer.app.data.repository.PrizeRepository
 import com.tinytimer.app.data.repository.RecordRepository
 import com.tinytimer.app.service.TimerService
 import kotlinx.coroutines.flow.*
@@ -24,10 +28,28 @@ data class SessionRecord(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+/**
+ * 奖励弹窗状态
+ */
+sealed class RewardUiState {
+    /** 隐藏状态 */
+    data object Hidden : RewardUiState()
+    /** 显示排名（前三名） */
+    data class ShowRanking(
+        val ranking: TimerRanking,
+        val rewardInfo: RewardInfo?
+    ) : RewardUiState()
+    /** 显示鼓励提示（排名4+） */
+    data class ShowEncouragement(
+        val groupName: String
+    ) : RewardUiState()
+}
+
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val groupRepository = GroupRepository(TinyTimerApp.instance.database.groupDao())
     private val recordRepository = RecordRepository(TinyTimerApp.instance.database.recordDao())
+    private val prizeRepository = PrizeRepository(TinyTimerApp.instance.database.prizeDao())
 
     val groups: StateFlow<List<GroupEntity>> = groupRepository.getAllGroups()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -52,6 +74,17 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _sessionRecords = MutableStateFlow<List<SessionRecord>>(emptyList())
     val sessionRecords: StateFlow<List<SessionRecord>> = _sessionRecords
+
+    private val _rewardUiState = MutableStateFlow<RewardUiState>(RewardUiState.Hidden)
+    val rewardUiState: StateFlow<RewardUiState> = _rewardUiState
+
+    // 跟踪待排名的分组信息（多分组场景）
+    private data class PendingRanking(
+        val groupId: Long,
+        val groupName: String,
+        val duration: Long
+    )
+    private val _pendingRankings = MutableStateFlow<List<PendingRanking>>(emptyList())
 
     private var timerService: TimerService? = null
     private var bound = false
@@ -145,10 +178,24 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopTimer() {
         val totalTime = _elapsedTime.value
+        val selectedIds = _selectedGroupIds.value
         timerService?.stopTimer()
-        val record = SessionRecord(duration = totalTime)
+
+        // 单分组或无分组计时
+        val groupId = selectedIds.firstOrNull()
+        val groupName = groupId?.let { gid -> groups.value.find { it.id == gid }?.name }
+
+        val record = SessionRecord(duration = totalTime, groupId = groupId, groupName = groupName)
         _sessionRecords.value = listOf(record) + _sessionRecords.value
         _elapsedTime.value = 0
+
+        // 触发排名计算
+        if (groupId != null && totalTime > 0) {
+            val name = groups.value.find { it.id == groupId }?.name ?: ""
+            viewModelScope.launch {
+                calculateRanking(groupId, name, totalTime)
+            }
+        }
     }
 
     fun markAndSave() {
@@ -183,7 +230,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val currentElapsed = _elapsedTime.value
         _stoppedGroupIds.value = _stoppedGroupIds.value + groupId
 
-        val groupName = groups.value.find { it.id == groupId }?.name
+        val groupName = groups.value.find { it.id == groupId }?.name ?: ""
 
         viewModelScope.launch {
             val record = RecordEntity(
@@ -193,6 +240,21 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 duration = currentElapsed
             )
             recordRepository.insertRecord(record)
+
+            // 添加待排名信息
+            val pending = PendingRanking(groupId, groupName, currentElapsed)
+            _pendingRankings.value = _pendingRankings.value + pending
+
+            // 检查是否所有分组都已停止
+            val stoppedCount = _stoppedGroupIds.value.size
+            val selectedCount = _selectedGroupIds.value.size
+            if (stoppedCount >= selectedCount && selectedCount > 1) {
+                // 所有分组都停止了，触发排名计算
+                for (p in _pendingRankings.value) {
+                    calculateRanking(p.groupId, p.groupName, p.duration)
+                }
+                _pendingRankings.value = emptyList()
+            }
         }
 
         val sessionRecord = SessionRecord(
@@ -213,16 +275,40 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     fun quickStop() {
         val totalTime = _elapsedTime.value
+        val selectedIds = _selectedGroupIds.value
+        val groupId = selectedIds.firstOrNull() ?: timerService?.timerState?.value?.groupId
+        val groupName = groupId?.let { gid -> groups.value.find { it.id == gid }?.name }
+
         timerService?.quickStop()
-        val record = SessionRecord(duration = totalTime)
+        val record = SessionRecord(duration = totalTime, groupId = groupId, groupName = groupName)
         _sessionRecords.value = listOf(record) + _sessionRecords.value
         _elapsedTime.value = 0
+
+        // 触发排名计算
+        if (groupId != null && totalTime > 0) {
+            val name = groupName ?: ""
+            viewModelScope.launch {
+                calculateRanking(groupId, name, totalTime)
+            }
+        }
     }
 
     fun confirmStop(saveRecord: Boolean, note: String? = null) {
+        val totalTime = _elapsedTime.value
+        val groupId = timerService?.timerState?.value?.groupId
+        val groupName = groupId?.let { gid -> groups.value.find { it.id == gid }?.name }
+
         timerService?.confirmStop(saveRecord, note)
         if (!saveRecord) {
             _elapsedTime.value = 0
+        }
+
+        // 保存记录时触发排名计算
+        if (saveRecord && groupId != null && totalTime > 0) {
+            val name = groupName ?: ""
+            viewModelScope.launch {
+                calculateRanking(groupId, name, totalTime)
+            }
         }
     }
 
@@ -232,6 +318,51 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    /**
+     * 计算排名并更新奖励 UI 状态
+     * 排名 = 该分组内比当次计时更短的记录数 + 1
+     */
+    private suspend fun calculateRanking(groupId: Long, groupName: String, duration: Long) {
+        // 确保记录已保存（delay 等待 Service 异步保存完成）
+        kotlinx.coroutines.delay(100)
+
+        val shorterCount = recordRepository.countRecordsShorterThan(groupId, duration)
+        val rank = shorterCount + 1
+
+        val ranking = TimerRanking(
+            groupId = groupId,
+            groupName = groupName,
+            currentDuration = duration,
+            rank = rank
+        )
+
+        if (rank <= 3) {
+            // 前三名，查找对应的奖品
+            val prizes = prizeRepository.getPrizesByGroupIdOnce(groupId)
+            val matchingPrize = prizes.find { it.level == rank }
+            val rewardInfo = if (matchingPrize != null) {
+                RewardInfo(
+                    rank = rank,
+                    prizeName = matchingPrize.name,
+                    prizeImagePath = matchingPrize.imagePath
+                )
+            } else {
+                RewardInfo(rank = rank, prizeName = null, prizeImagePath = null)
+            }
+            _rewardUiState.value = RewardUiState.ShowRanking(ranking, rewardInfo)
+        } else {
+            // 排名4+，显示鼓励提示
+            _rewardUiState.value = RewardUiState.ShowEncouragement(groupName)
+        }
+    }
+
+    /**
+     * 关闭奖励弹窗
+     */
+    fun dismissReward() {
+        _rewardUiState.value = RewardUiState.Hidden
     }
 
     override fun onCleared() {

@@ -24,6 +24,9 @@ interface PrizeDao {
     @Query("SELECT * FROM prizes WHERE boundGroupIds LIKE '%' || :groupId || '%' ORDER BY level ASC, createdAt DESC")
     fun getPrizesByGroupId(groupId: Long): Flow<List<PrizeEntity>>
 
+    @Query("SELECT * FROM prizes WHERE boundGroupIds LIKE '%' || :groupId || '%' ORDER BY level ASC, createdAt DESC")
+    suspend fun getPrizesByGroupIdOnce(groupId: Long): List<PrizeEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(prize: PrizeEntity): Long
 

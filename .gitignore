@@ -57,3 +57,4 @@ fabric.properties
 *.tmp
 
 .trae/
+.codebuddy/

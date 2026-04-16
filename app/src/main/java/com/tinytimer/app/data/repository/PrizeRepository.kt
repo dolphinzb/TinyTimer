@@ -18,6 +18,8 @@ class PrizeRepository(private val prizeDao: PrizeDao) {
 
     fun getPrizesByGroupId(groupId: Long): Flow<List<PrizeEntity>> = prizeDao.getPrizesByGroupId(groupId)
 
+    suspend fun getPrizesByGroupIdOnce(groupId: Long): List<PrizeEntity> = prizeDao.getPrizesByGroupIdOnce(groupId)
+
     suspend fun insertPrize(prize: PrizeEntity): Long = prizeDao.insert(prize)
 
     suspend fun updatePrize(prize: PrizeEntity) = prizeDao.update(prize)
