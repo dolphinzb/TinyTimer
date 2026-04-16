@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tinytimer.app.ui.components.RewardDialog
+import com.tinytimer.app.ui.viewmodel.RewardUiState
 import com.tinytimer.app.ui.viewmodel.TimerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,6 +31,7 @@ fun TimerPage(
     val selectedGroupIds by viewModel.selectedGroupIds.collectAsState()
     val stoppedGroupIds by viewModel.stoppedGroupIds.collectAsState()
     val sessionRecords by viewModel.sessionRecords.collectAsState()
+    val rewardUiState by viewModel.rewardUiState.collectAsState()
 
     Column(
         modifier = Modifier
@@ -245,4 +248,11 @@ fun TimerPage(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+
+    // 奖励弹窗
+    RewardDialog(
+        state = rewardUiState,
+        onDismiss = { viewModel.dismissReward() },
+        formatTime = { viewModel.formatTime(it) }
+    )
 }

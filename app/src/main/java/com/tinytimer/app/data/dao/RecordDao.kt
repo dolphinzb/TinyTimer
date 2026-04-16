@@ -41,4 +41,7 @@ interface RecordDao {
 
     @Query("SELECT * FROM records WHERE groupId = :groupId ORDER BY duration ASC LIMIT 10")
     fun getTop10ShortestRecordsByGroup(groupId: Long): Flow<List<RecordEntity>>
+
+    @Query("SELECT COUNT(*) FROM records WHERE groupId = :groupId AND duration < :duration")
+    suspend fun countRecordsShorterThan(groupId: Long, duration: Long): Int
 }

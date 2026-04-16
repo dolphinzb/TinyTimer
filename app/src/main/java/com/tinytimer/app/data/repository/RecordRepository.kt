@@ -41,6 +41,8 @@ class RecordRepository(private val recordDao: RecordDao) {
 
     fun getTop10ShortestRecordsByGroup(groupId: Long): Flow<List<RecordEntity>> = recordDao.getTop10ShortestRecordsByGroup(groupId)
 
+    suspend fun countRecordsShorterThan(groupId: Long, duration: Long): Int = recordDao.countRecordsShorterThan(groupId, duration)
+
     suspend fun exportToCsv(): String {
         val records = recordDao.getAllRecordsOnce()
         val sb = StringBuilder()
