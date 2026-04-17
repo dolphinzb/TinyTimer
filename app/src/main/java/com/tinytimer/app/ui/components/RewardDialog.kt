@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -46,10 +47,23 @@ fun RewardDialog(
                 formatTime = formatTime
             )
         }
+        is RewardUiState.ShowQualified -> {
+            QualifiedDialog(
+                groupName = state.groupName,
+                qualificationDuration = state.qualificationDuration,
+                currentDuration = state.currentDuration,
+                rewardInfo = state.rewardInfo,
+                onDismiss = onDismiss,
+                formatTime = formatTime
+            )
+        }
         is RewardUiState.ShowEncouragement -> {
             EncouragementDialog(
                 groupName = state.groupName,
-                onDismiss = onDismiss
+                qualificationDuration = state.qualificationDuration,
+                currentDuration = state.currentDuration,
+                onDismiss = onDismiss,
+                formatTime = formatTime
             )
         }
     }
@@ -154,12 +168,15 @@ private fun RewardRankingDialog(
 }
 
 /**
- * 鼓励弹窗（排名4+）
+ * 鼓励弹窗（时长超过合格线或排名4+且无合格线）
  */
 @Composable
 private fun EncouragementDialog(
     groupName: String,
-    onDismiss: () -> Unit
+    qualificationDuration: Long?,
+    currentDuration: Long?,
+    onDismiss: () -> Unit,
+    formatTime: (Long) -> String
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -172,10 +189,125 @@ private fun EncouragementDialog(
             )
         },
         text = {
-            Text(
-                text = "$groupName 再接再厉，争取下次上榜！",
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Column {
+                if (qualificationDuration != null && currentDuration != null) {
+                    // 有合格线信息时显示对比
+                    Text(
+                        text = "$groupName 用时 ${formatTime(currentDuration)}，超过合格线 ${formatTime(qualificationDuration)}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                } else {
+                    Text(
+                        text = "$groupName 再接再厉，争取下次上榜！",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("知道了")
+            }
+        }
+    )
+}
+
+/**
+ * 合格奖弹窗（排名4+且时长低于合格线）
+ */
+@Composable
+private fun QualifiedDialog(
+    groupName: String,
+    qualificationDuration: Long,
+    currentDuration: Long,
+    rewardInfo: RewardInfo?,
+    onDismiss: () -> Unit,
+    formatTime: (Long) -> String
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(24.dp),
+        title = null,
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 合格图标（绿色勾选）
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "达标",
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .size(40.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 达标文字
+                Text(
+                    text = "达标！",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF4CAF50)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 分组名和时长
+                Text(
+                    text = "$groupName · ${formatTime(currentDuration)}",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 合格线说明
+                Text(
+                    text = "合格线 ${formatTime(qualificationDuration)}",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+
+                // 奖品信息
+                if (rewardInfo != null && rewardInfo.prizeName != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "获得奖品",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    PrizeImage(
+                        imagePath = rewardInfo.prizeImagePath,
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = rewardInfo.prizeName,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {

@@ -9,7 +9,8 @@ import androidx.room.PrimaryKey
 enum class PrizeLevel(val value: Int, val displayName: String) {
     FIRST(1, "一等奖"),
     SECOND(2, "二等奖"),
-    THIRD(3, "三等奖");
+    THIRD(3, "三等奖"),
+    QUALIFIED(4, "合格奖");
 
     companion object {
         fun fromValue(value: Int): PrizeLevel {

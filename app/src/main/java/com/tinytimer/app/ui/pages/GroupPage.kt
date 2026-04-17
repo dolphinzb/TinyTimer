@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tinytimer.app.data.entity.GroupEntity
 import com.tinytimer.app.ui.viewmodel.GroupViewModel
@@ -35,6 +38,9 @@ fun GroupPage(
     var showDialog by remember { mutableStateOf(false) }
     var dialogName by remember { mutableStateOf("") }
     var dialogColor by remember { mutableStateOf(0xFF2196F3) }
+    var dialogQualificationHours by remember { mutableStateOf("") }
+    var dialogQualificationMinutes by remember { mutableStateOf("") }
+    var dialogQualificationSeconds by remember { mutableStateOf("") }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -82,6 +88,9 @@ fun GroupPage(
                 onClick = {
                     dialogName = ""
                     dialogColor = 0xFF2196F3
+                    dialogQualificationHours = ""
+                    dialogQualificationMinutes = ""
+                    dialogQualificationSeconds = ""
                     viewModel.cancelEditing()
                     showDialog = true
                 }
@@ -133,6 +142,18 @@ fun GroupPage(
                         onEdit = {
                             dialogName = group.name
                             dialogColor = group.color
+                            // 回显合格线时长
+                            val qd = group.qualificationDuration
+                            if (qd != null && qd > 0) {
+                                val totalSeconds = qd / 1000
+                                dialogQualificationHours = (totalSeconds / 3600).toString()
+                                dialogQualificationMinutes = ((totalSeconds % 3600) / 60).toString()
+                                dialogQualificationSeconds = (totalSeconds % 60).toString()
+                            } else {
+                                dialogQualificationHours = ""
+                                dialogQualificationMinutes = ""
+                                dialogQualificationSeconds = ""
+                            }
                             viewModel.startEditing(group)
                             showDialog = true
                         },
@@ -190,16 +211,54 @@ fun GroupPage(
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("合格线时长（留空表示不设置）")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = dialogQualificationHours,
+                            onValueChange = { if (it.length <= 2) dialogQualificationHours = it.filter { c -> c.isDigit() } },
+                            label = { Text("时") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(":", fontWeight = FontWeight.Bold)
+                        OutlinedTextField(
+                            value = dialogQualificationMinutes,
+                            onValueChange = { if (it.length <= 2) dialogQualificationMinutes = it.filter { c -> c.isDigit() } },
+                            label = { Text("分") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(":", fontWeight = FontWeight.Bold)
+                        OutlinedTextField(
+                            value = dialogQualificationSeconds,
+                            onValueChange = { if (it.length <= 2) dialogQualificationSeconds = it.filter { c -> c.isDigit() } },
+                            label = { Text("秒") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         if (dialogName.isNotBlank()) {
+                            // 计算合格线时长（毫秒）
+                            val hours = dialogQualificationHours.toLongOrNull() ?: 0L
+                            val minutes = dialogQualificationMinutes.toLongOrNull() ?: 0L
+                            val seconds = dialogQualificationSeconds.toLongOrNull() ?: 0L
+                            val totalMs = (hours * 3600 + minutes * 60 + seconds) * 1000
+                            val qualificationDuration = if (totalMs > 0) totalMs else null
+
                             if (editingGroup != null) {
-                                viewModel.updateGroup(editingGroup!!.copy(name = dialogName, color = dialogColor))
+                                viewModel.updateGroup(editingGroup!!.copy(name = dialogName, color = dialogColor, qualificationDuration = qualificationDuration))
                             } else {
-                                viewModel.createGroup(dialogName, dialogColor)
+                                viewModel.createGroup(dialogName, dialogColor, qualificationDuration)
                             }
                             showDialog = false
                         }
@@ -246,11 +305,24 @@ private fun GroupItem(
                     .background(Color(group.color))
             )
             Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = group.name,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                if (group.qualificationDuration != null && group.qualificationDuration > 0) {
+                    val qd = group.qualificationDuration
+                    val totalSec = qd / 1000
+                    val h = totalSec / 3600
+                    val m = (totalSec % 3600) / 60
+                    val s = totalSec % 60
+                    Text(
+                        text = "合格线 ${String.format("%02d:%02d:%02d", h, m, s)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             IconButton(onClick = onEdit) {
                 Icon(Icons.Default.Edit, contentDescription = "编辑")
             }

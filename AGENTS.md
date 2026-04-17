@@ -239,7 +239,7 @@ adb kill-server && adb start-server
 - **不要修改 Room 数据库版本号** 除非进行数据库迁移
 - **Foreground Service 必须设置正确的** **`foregroundServiceType`**（当前为 `specialUse`）
 - **通知渠道只创建一次**，后续直接使用已有 ID
-- **使用 ADB 安装时**，如果设备显示"无法安装"可能是签名问题，需卸载旧版本
+- **使用 ADB 安装时**，如果设备显示"无法安装"请提示我，禁止擅自删除旧版本应用
 - **构建前先同步 Gradle** (`./gradle sync`)
 
 ***
