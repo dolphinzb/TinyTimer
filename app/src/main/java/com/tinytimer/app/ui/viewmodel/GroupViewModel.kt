@@ -31,9 +31,9 @@ class GroupViewModel : ViewModel() {
     private val _importExportMessage = MutableStateFlow<String?>(null)
     val importExportMessage: StateFlow<String?> = _importExportMessage
 
-    fun createGroup(name: String, color: Long) {
+    fun createGroup(name: String, color: Long, qualificationDuration: Long? = null) {
         viewModelScope.launch {
-            val group = GroupEntity(name = name, color = color)
+            val group = GroupEntity(name = name, color = color, qualificationDuration = qualificationDuration)
             groupRepository.insertGroup(group)
         }
     }

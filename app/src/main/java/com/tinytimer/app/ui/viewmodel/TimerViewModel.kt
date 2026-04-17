@@ -11,8 +11,10 @@ import androidx.lifecycle.viewModelScope
 import com.tinytimer.app.TinyTimerApp
 import com.tinytimer.app.data.entity.GroupEntity
 import com.tinytimer.app.data.entity.PrizeEntity
+import com.tinytimer.app.data.entity.PrizeLevel
 import com.tinytimer.app.data.entity.RecordEntity
 import com.tinytimer.app.data.model.RewardInfo
+import com.tinytimer.app.data.model.SummaryRewardItem
 import com.tinytimer.app.data.model.TimerRanking
 import com.tinytimer.app.data.repository.GroupRepository
 import com.tinytimer.app.data.repository.PrizeRepository
@@ -34,14 +36,27 @@ data class SessionRecord(
 sealed class RewardUiState {
     /** 隐藏状态 */
     data object Hidden : RewardUiState()
-    /** 显示排名（前三名） */
+    /** 显示排名（前三名，单分组场景） */
     data class ShowRanking(
         val ranking: TimerRanking,
         val rewardInfo: RewardInfo?
     ) : RewardUiState()
-    /** 显示鼓励提示（排名4+） */
+    /** 显示合格奖（排名4+且时长低于合格线，单分组场景） */
+    data class ShowQualified(
+        val groupName: String,
+        val qualificationDuration: Long,
+        val currentDuration: Long,
+        val rewardInfo: RewardInfo?
+    ) : RewardUiState()
+    /** 显示鼓励提示（时长超过合格线，不论排名，单分组场景） */
     data class ShowEncouragement(
-        val groupName: String
+        val groupName: String,
+        val qualificationDuration: Long? = null,
+        val currentDuration: Long? = null
+    ) : RewardUiState()
+    /** 汇总弹窗（多分组同时计时全部停止后） */
+    data class ShowSummary(
+        val items: List<SummaryRewardItem>
     ) : RewardUiState()
 }
 
@@ -249,11 +264,12 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             val stoppedCount = _stoppedGroupIds.value.size
             val selectedCount = _selectedGroupIds.value.size
             if (stoppedCount >= selectedCount && selectedCount > 1) {
-                // 所有分组都停止了，触发排名计算
-                for (p in _pendingRankings.value) {
-                    calculateRanking(p.groupId, p.groupName, p.duration)
-                }
+                // 所有分组都停止了，触发汇总排名计算
+                calculateSummaryRanking(_pendingRankings.value)
                 _pendingRankings.value = emptyList()
+                timerService?.stopImmediately()
+                _elapsedTime.value = 0
+                clearSelectedGroups()
             }
         }
 
@@ -263,14 +279,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             groupName = groupName
         )
         _sessionRecords.value = listOf(sessionRecord) + _sessionRecords.value
-
-        val stoppedCount = _stoppedGroupIds.value.size
-        val selectedCount = _selectedGroupIds.value.size
-        if (stoppedCount >= selectedCount && selectedCount > 1) {
-            timerService?.stopImmediately()
-            _elapsedTime.value = 0
-            clearSelectedGroups()
-        }
     }
 
     fun quickStop() {
@@ -321,41 +329,104 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 计算排名并更新奖励 UI 状态
+     * 计算排名并更新奖励 UI 状态（单分组场景）
      * 排名 = 该分组内比当次计时更短的记录数 + 1
      */
     private suspend fun calculateRanking(groupId: Long, groupName: String, duration: Long) {
-        // 确保记录已保存（delay 等待 Service 异步保存完成）
+        val result = computeRewardItem(groupId, groupName, duration)
+        when {
+            result.isQualified -> {
+                _rewardUiState.value = RewardUiState.ShowQualified(
+                    groupName = groupName,
+                    qualificationDuration = result.qualificationDuration!!,
+                    currentDuration = duration,
+                    rewardInfo = result.rewardInfo
+                )
+            }
+            result.rank != null && result.rank <= 3 -> {
+                val ranking = TimerRanking(
+                    groupId = groupId,
+                    groupName = groupName,
+                    currentDuration = duration,
+                    rank = result.rank
+                )
+                _rewardUiState.value = RewardUiState.ShowRanking(ranking, result.rewardInfo)
+            }
+            result.qualificationDuration != null && duration > result.qualificationDuration -> {
+                _rewardUiState.value = RewardUiState.ShowEncouragement(
+                    groupName = groupName,
+                    qualificationDuration = result.qualificationDuration,
+                    currentDuration = duration
+                )
+            }
+            else -> {
+                _rewardUiState.value = RewardUiState.ShowEncouragement(groupName)
+            }
+        }
+    }
+
+    /**
+     * 计算汇总排名并更新奖励 UI 状态（多分组场景）
+     * 所有分组停止后，在一个汇总弹窗中同时展示
+     */
+    private suspend fun calculateSummaryRanking(pendingRankings: List<PendingRanking>) {
         kotlinx.coroutines.delay(100)
 
+        val items = pendingRankings.map { pending ->
+            computeRewardItem(pending.groupId, pending.groupName, pending.duration)
+        }.sortedWith(compareBy<SummaryRewardItem> { it.rank ?: Int.MAX_VALUE }
+            .thenBy { it.isQualified }
+            .thenByDescending { it.qualificationDuration })
+
+        _rewardUiState.value = RewardUiState.ShowSummary(items)
+    }
+
+    /**
+     * 计算单个分组的排名和奖励信息，返回 SummaryRewardItem
+     */
+    private suspend fun computeRewardItem(groupId: Long, groupName: String, duration: Long): SummaryRewardItem {
         val shorterCount = recordRepository.countRecordsShorterThan(groupId, duration)
         val rank = shorterCount + 1
 
-        val ranking = TimerRanking(
+        val group = groupRepository.getGroupById(groupId)
+        val qualificationDuration = group?.qualificationDuration
+
+        val exceedsQualification = qualificationDuration != null && duration > qualificationDuration
+        val isTop3 = rank <= 3
+        val isQualified = rank > 3 && qualificationDuration != null && duration <= qualificationDuration
+
+        val rewardInfo = when {
+            isTop3 && !exceedsQualification -> {
+                val prizes = prizeRepository.getPrizesByGroupIdOnce(groupId)
+                val matchingPrize = prizes.find { it.level == rank }
+                if (matchingPrize != null) {
+                    RewardInfo(rank = rank, prizeName = matchingPrize.name, prizeImagePath = matchingPrize.imagePath)
+                } else {
+                    RewardInfo(rank = rank, prizeName = null, prizeImagePath = null)
+                }
+            }
+            isQualified -> {
+                val prizes = prizeRepository.getPrizesByGroupIdOnce(groupId)
+                val qualifiedPrize = prizes.find { it.level == PrizeLevel.QUALIFIED.value }
+                if (qualifiedPrize != null) {
+                    RewardInfo(rank = PrizeLevel.QUALIFIED.value, prizeName = qualifiedPrize.name, prizeImagePath = qualifiedPrize.imagePath)
+                } else {
+                    RewardInfo(rank = PrizeLevel.QUALIFIED.value, prizeName = null, prizeImagePath = null)
+                }
+            }
+            else -> null
+        }
+
+        return SummaryRewardItem(
             groupId = groupId,
             groupName = groupName,
             currentDuration = duration,
-            rank = rank
+            rank = if (isTop3) rank else null,
+            rewardInfo = rewardInfo,
+            isQualified = isQualified,
+            exceedsQualification = exceedsQualification,
+            qualificationDuration = qualificationDuration
         )
-
-        if (rank <= 3) {
-            // 前三名，查找对应的奖品
-            val prizes = prizeRepository.getPrizesByGroupIdOnce(groupId)
-            val matchingPrize = prizes.find { it.level == rank }
-            val rewardInfo = if (matchingPrize != null) {
-                RewardInfo(
-                    rank = rank,
-                    prizeName = matchingPrize.name,
-                    prizeImagePath = matchingPrize.imagePath
-                )
-            } else {
-                RewardInfo(rank = rank, prizeName = null, prizeImagePath = null)
-            }
-            _rewardUiState.value = RewardUiState.ShowRanking(ranking, rewardInfo)
-        } else {
-            // 排名4+，显示鼓励提示
-            _rewardUiState.value = RewardUiState.ShowEncouragement(groupName)
-        }
     }
 
     /**

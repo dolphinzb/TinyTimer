@@ -21,7 +21,7 @@ class GroupRepository(private val groupDao: GroupDao) {
 
     fun exportToCsv(): String {
         val sb = StringBuilder()
-        sb.appendLine("id,name,color,createdAt")
+        sb.appendLine("id,name,color,createdAt,qualificationDuration")
         return sb.toString()
     }
 
@@ -29,9 +29,9 @@ class GroupRepository(private val groupDao: GroupDao) {
         val groups = mutableListOf<GroupEntity>()
         groupDao.getAllGroupsOnce().forEach { groups.add(it) }
         val sb = StringBuilder()
-        sb.appendLine("id,name,color,createdAt")
+        sb.appendLine("id,name,color,createdAt,qualificationDuration")
         groups.forEach { group ->
-            sb.appendLine("${group.id},\"${group.name.replace("\"", "\"\"")}\",${group.color},${group.createdAt}")
+            sb.appendLine("${group.id},\"${group.name.replace("\"", "\"\"")}\",${group.color},${group.createdAt},${group.qualificationDuration ?: ""}")
         }
         return sb.toString()
     }
@@ -51,7 +51,8 @@ class GroupRepository(private val groupDao: GroupDao) {
                     val name = parts[1]
                     val color = parts[2].toLongOrNull() ?: 0xFF2196F3
                     val createdAt = parts.getOrNull(3)?.toLongOrNull() ?: System.currentTimeMillis()
-                    val group = GroupEntity(name = name, color = color, createdAt = createdAt)
+                    val qualificationDuration = parts.getOrNull(4)?.toLongOrNull()
+                    val group = GroupEntity(name = name, color = color, createdAt = createdAt, qualificationDuration = qualificationDuration)
                     groupDao.insert(group)
                     importedCount++
                 }
